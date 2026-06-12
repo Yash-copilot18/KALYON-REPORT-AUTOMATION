@@ -1,4 +1,3 @@
-// src/pages/Scheduled/Scheduled.jsx
 import React, { useState } from 'react'
 import { PageHeader, AsyncButton, Skeleton } from '../../components/Common'
 import { useFetch } from '../../hooks/useFetch'
@@ -11,7 +10,8 @@ function ScheduleForm({ initial = {} }) {
     <div className="space-y-3">
       <div className="flex flex-col gap-1">
         <label className="form-label">Report Name</label>
-        <input className="form-control" defaultValue={initial.name || ''} placeholder="e.g. Daily Generation Report" />
+        <input className="form-control" defaultValue={initial.name || ''}
+          placeholder="e.g. Daily Generation Report" />
       </div>
       <div className="flex flex-col gap-1">
         <label className="form-label">Frequency</label>
@@ -38,17 +38,11 @@ function ScheduleForm({ initial = {} }) {
         <label className="form-label">Equipment Type</label>
         <select className="form-control">
           <option>All Equipment</option>
-          <option>Inverter</option><option>String Combiner Box</option>
-          <option>Weather Station</option><option>Transformer</option>
+          <option>Inverter</option>
+          <option>String Combiner Box</option>
+          <option>Weather Station</option>
+          <option>Transformer</option>
         </select>
-      </div>
-      <div className="flex flex-col gap-1">
-        <label className="form-label">Tags</label>
-        <select className="form-control" multiple style={{ height: 80 }}>
-          {['AC Power','DC Voltage','Energy Today','Irradiance','Temperature'].map(t =>
-            <option key={t}>{t}</option>)}
-        </select>
-        <span className="text-[10px] text-ge-text3">Hold Ctrl/Cmd to select multiple</span>
       </div>
     </div>
   )
@@ -56,10 +50,12 @@ function ScheduleForm({ initial = {} }) {
 
 export default function Scheduled() {
   const { openModal, showToast } = useApp()
-  const { data, loading } = useFetch(fetchScheduledReports)
+  const { data: rawData, loading } = useFetch(fetchScheduledReports)
   const [deleted, setDeleted] = useState(new Set())
 
-  const rows = (data || []).filter(r => !deleted.has(r.id))
+  // Normalize — fetchScheduledReports returns array directly
+  const allData = Array.isArray(rawData) ? rawData : []
+  const rows = allData.filter(r => !deleted.has(r.id))
 
   const handleDelete = id => {
     setDeleted(prev => new Set([...prev, id]))
@@ -81,14 +77,18 @@ export default function Scheduled() {
         </button>
       </PageHeader>
 
-      {/* Summary stats */}
+      {/* Summary Stats */}
       <div className="grid grid-cols-3 gap-3 mb-4">
         <div className="card text-center">
-          <div className="text-2xl font-mono text-ge-accent">{rows.filter(r=>r.status==='Active').length}</div>
+          <div className="text-2xl font-mono text-ge-accent">
+            {rows.filter(r => r.status === 'Active').length}
+          </div>
           <div className="text-[11px] text-ge-text3 mt-1">Active Schedules</div>
         </div>
         <div className="card text-center">
-          <div className="text-2xl font-mono text-ge-warn">{rows.filter(r=>r.status==='Paused').length}</div>
+          <div className="text-2xl font-mono text-ge-warn">
+            {rows.filter(r => r.status === 'Paused').length}
+          </div>
           <div className="text-[11px] text-ge-text3 mt-1">Paused</div>
         </div>
         <div className="card text-center">
@@ -112,9 +112,11 @@ export default function Scheduled() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center text-ge-text3 py-8">
-                    No schedules — click "Create Schedule"
-                  </td></tr>
+                  <tr>
+                    <td colSpan={6} className="text-center text-ge-text3 py-8">
+                      No schedules — click "Create Schedule"
+                    </td>
+                  </tr>
                 ) : rows.map(r => (
                   <tr key={r.id}>
                     <td className="font-medium text-ge-text1">{r.name}</td>
@@ -124,7 +126,10 @@ export default function Scheduled() {
                     <td><span className={statusPillClass(r.status)}>{r.status}</span></td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <AsyncButton className="btn btn-outline btn-sm" successMsg={`Running ${r.name}...`}>
+                        <AsyncButton
+                          className="btn btn-outline btn-sm"
+                          successMsg={`Running ${r.name}...`}
+                        >
                           ▶ Run
                         </AsyncButton>
                         <button className="btn btn-outline btn-sm" onClick={() => openCreate(r)}>

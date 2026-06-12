@@ -1,10 +1,17 @@
-// src/pages/Users/Users.jsx
 import React, { useState } from 'react'
 import { PageHeader, SearchInput, AsyncButton, Skeleton } from '../../components/Common'
 import { useFetch } from '../../hooks/useFetch'
 import { fetchUsers } from '../../services/api'
 import { initials, rolePillClass } from '../../utils/helpers'
 import { useApp } from '../../utils/AppContext'
+
+const AVATAR_COLORS = [
+  'from-blue-500 to-purple-600',
+  'from-teal-500 to-blue-600',
+  'from-purple-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+  'from-green-500 to-teal-600',
+]
 
 function UserForm({ user = {} }) {
   return (
@@ -49,30 +56,26 @@ function UserForm({ user = {} }) {
 
 export default function Users() {
   const { openModal } = useApp()
-  const { data, loading } = useFetch(fetchUsers)
-  const [search, setSearch]   = useState('')
-  const [filter, setFilter]   = useState('All')
+  const { data: rawData, loading } = useFetch(fetchUsers)
+  const [search, setSearch] = useState('')
+  const [filter, setFilter] = useState('All')
 
-  const rows = (data || []).filter(u => {
+  // Normalize — fetchUsers returns array directly
+  const allUsers = Array.isArray(rawData) ? rawData : []
+
+  const rows = allUsers.filter(u => {
     const matchS = !search || [u.name, u.email, u.role, u.dept].some(
-      v => v.toLowerCase().includes(search.toLowerCase())
+      v => v && v.toLowerCase().includes(search.toLowerCase())
     )
     const matchF = filter === 'All' || u.role === filter
     return matchS && matchF
   })
 
-  const AVATAR_COLORS = [
-    'from-blue-500 to-purple-600',
-    'from-teal-500 to-blue-600',
-    'from-purple-500 to-pink-600',
-    'from-amber-500 to-orange-600',
-    'from-green-500 to-teal-600',
-  ]
-
   return (
     <div>
       <PageHeader title="User Management" subtitle="Manage platform access and roles">
-        <button className="btn btn-success btn-sm" onClick={() => openModal('Add New User', <UserForm />)}>
+        <button className="btn btn-success btn-sm"
+          onClick={() => openModal('Add New User', <UserForm />)}>
           + Add User
         </button>
       </PageHeader>
@@ -80,10 +83,10 @@ export default function Users() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-4">
         {[
-          { l:'Total Users',  v:(data||[]).length,                       c:'blue'   },
-          { l:'Active Now',   v:(data||[]).filter(u=>u.active).length,   c:'green'  },
-          { l:'Admins',       v:(data||[]).filter(u=>u.role==='Admin').length, c:'red' },
-          { l:'Engineers',    v:(data||[]).filter(u=>u.role==='Engineer').length, c:'amber' },
+          { l:'Total Users', v: allUsers.length,                              c:'blue'  },
+          { l:'Active Now',  v: allUsers.filter(u => u.active).length,        c:'green' },
+          { l:'Admins',      v: allUsers.filter(u => u.role === 'Admin').length,    c:'red'   },
+          { l:'Engineers',   v: allUsers.filter(u => u.role === 'Engineer').length, c:'amber' },
         ].map(({ l, v, c }) => (
           <div key={l} className={`kpi-card kpi-${c}`}>
             <div className="font-mono text-[10px] text-ge-text3 uppercase tracking-widest mb-1">{l}</div>
@@ -95,34 +98,46 @@ export default function Users() {
       <div className="card">
         <div className="card-title justify-between">
           <span>Platform Users</span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {['All','Admin','Manager','Engineer','Analyst'].map(f => (
               <button key={f} onClick={() => setFilter(f)}
                 className={`btn btn-sm ${filter === f ? 'btn-primary' : 'btn-outline'}`}>
                 {f}
               </button>
             ))}
-            <SearchInput value={search} onChange={setSearch} placeholder="Search users..." className="w-44" />
+            <SearchInput value={search} onChange={setSearch}
+              placeholder="Search users..." className="w-44" />
           </div>
         </div>
 
         {loading ? (
-          <div className="space-y-1">{[...Array(5)].map((_, i) => <Skeleton key={i} h="h-12" />)}</div>
+          <div className="space-y-1">
+            {[...Array(5)].map((_, i) => <Skeleton key={i} h="h-12" />)}
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="data-table">
               <thead>
-                <tr><th>User</th><th>Email</th><th>Role</th><th>Department</th><th>Last Active</th><th>Status</th><th>Actions</th></tr>
+                <tr>
+                  <th>User</th><th>Email</th><th>Role</th>
+                  <th>Department</th><th>Last Active</th><th>Status</th><th>Actions</th>
+                </tr>
               </thead>
               <tbody>
-                {rows.map((u, i) => (
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center text-ge-text3 py-8">
+                      No users found
+                    </td>
+                  </tr>
+                ) : rows.map((u, i) => (
                   <tr key={u.id}>
                     <td>
                       <div className="flex items-center gap-2.5">
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center
-                                        text-[10px] font-bold text-white bg-gradient-to-br flex-shrink-0
-                                        ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}>
-                          {initials(u.name)}
+                                        text-[10px] font-bold text-white bg-gradient-to-br
+                                        flex-shrink-0 ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`}>
+                          {initials(u.name || 'U')}
                         </div>
                         <span className="font-medium text-ge-text1">{u.name}</span>
                       </div>
@@ -133,8 +148,11 @@ export default function Users() {
                     <td className="font-mono text-[11px] text-ge-text3">{u.last}</td>
                     <td>
                       <div className="flex items-center gap-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${u.active ? 'bg-ge-success' : 'bg-ge-border2'}`} />
-                        <span className="text-[11px] text-ge-text3">{u.active ? 'Online' : 'Offline'}</span>
+                        <span className={`w-1.5 h-1.5 rounded-full
+                          ${u.active ? 'bg-ge-success' : 'bg-ge-border2'}`} />
+                        <span className="text-[11px] text-ge-text3">
+                          {u.active ? 'Online' : 'Offline'}
+                        </span>
                       </div>
                     </td>
                     <td>
@@ -143,7 +161,9 @@ export default function Users() {
                           onClick={() => openModal(`Edit User — ${u.name}`, <UserForm user={u} />)}>
                           ✎ Edit
                         </button>
-                        <AsyncButton className="btn btn-danger btn-sm" successMsg="User removed">✕</AsyncButton>
+                        <AsyncButton className="btn btn-danger btn-sm" successMsg="User removed">
+                          ✕
+                        </AsyncButton>
                       </div>
                     </td>
                   </tr>

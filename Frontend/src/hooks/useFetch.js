@@ -36,7 +36,7 @@ export function useAsync() {
     try {
       const result = await asyncFn()
       if (onSuccess) onSuccess(result)
-    } catch (e) {
+    } catch (e) {    
       const msg = e.message || 'Operation failed'
       setError(msg)
       if (onError) onError(msg)
