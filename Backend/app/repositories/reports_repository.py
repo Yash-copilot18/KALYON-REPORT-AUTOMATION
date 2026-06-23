@@ -370,14 +370,21 @@ def _build_interval_expr(interval: str) -> str:
     return mapping.get(interval, "TimeCol")
 
 
-def _build_agg_expr(col: str, fn: str) -> str:
-    fn_map = {
-        "avg": f"AVG(CAST([{col}] AS FLOAT))",
-        "min": f"MIN(CAST([{col}] AS FLOAT))",
-        "max": f"MAX(CAST([{col}] AS FLOAT))",
-        "sum": f"SUM(CAST([{col}] AS FLOAT))",
-    }
-    return fn_map.get(fn, f"AVG(CAST([{col}] AS FLOAT))")
+def _build_agg_expr(col: str, fn: str, data_type: str = "float") -> str:
+    """Build aggregation SQL — text columns use MIN/MAX, numeric use AVG/SUM."""
+    text_types = {"nvarchar", "varchar", "char", "nchar", "text", "ntext"}
+
+    if data_type.lower() in text_types:
+        # Text columns — only MIN or MAX make sense
+        return f"MIN([{col}])"
+    else:
+        fn_map = {
+            "avg": f"AVG(CAST([{col}] AS FLOAT))",
+            "min": f"MIN(CAST([{col}] AS FLOAT))",
+            "max": f"MAX(CAST([{col}] AS FLOAT))",
+            "sum": f"SUM(CAST([{col}] AS FLOAT))",
+        }
+        return fn_map.get(fn, f"AVG(CAST([{col}] AS FLOAT))")
 
 
 # ── Repository class ──────────────────────────────────────────────────────────
@@ -555,11 +562,33 @@ class ReportsRepository:
                 OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
             """)
         else:
-            grp      = _build_interval_expr(interval)
-            agg_cols = ", ".join([
-                f"{_build_agg_expr(t, agg_function)} AS [{t}]"
-                for t in tags
-            ])
+            grp = _build_interval_expr(interval)
+
+            # Get column data types to handle text vs numeric
+            col_info_sql = text("""
+                SELECT COLUMN_NAME, DATA_TYPE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME   = :tbl
+                  AND TABLE_SCHEMA = 'dbo'
+            """)
+            col_info   = {r[0]: r[1] for r in db.execute(col_info_sql, {"tbl": table}).fetchall()}
+            text_types = {"nvarchar","varchar","char","nchar","text","ntext"}
+
+            agg_parts = []
+            for t in tags:
+                dtype = col_info.get(t, "float").lower()
+                if dtype in text_types:
+                    agg_parts.append(f"MIN([{t}]) AS [{t}]")
+                else:
+                    fn_map = {
+                        "avg": f"AVG(CAST([{t}] AS FLOAT))",
+                        "min": f"MIN(CAST([{t}] AS FLOAT))",
+                        "max": f"MAX(CAST([{t}] AS FLOAT))",
+                        "sum": f"SUM(CAST([{t}] AS FLOAT))",
+                    }
+                    agg_parts.append(f"{fn_map.get(agg_function, fn_map['avg'])} AS [{t}]")
+
+            agg_cols = ", ".join(agg_parts)
             count_sql = text(f"""
                 SELECT COUNT(*) FROM (
                     SELECT {grp} AS ts
